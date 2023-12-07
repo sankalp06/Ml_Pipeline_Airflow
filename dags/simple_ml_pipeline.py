@@ -27,50 +27,40 @@ def load(**kwargs):
     # Save the DataFrame to a CSV file
     df.to_csv(output_filename, index=False)
 
-def train_and_evaluate_model(**kwargs):
-    file_path=kwargs['file_path'] 
-    target_column=kwargs['target_column']
-    save_model_filename= kwargs['save_model_filename']
-    classifier=kwargs['classifier']
 
+def train_and_evaluate_model(**kwargs):
+    file_path = kwargs['file_path']
+    target_column = kwargs['target_column']
+    classifier = kwargs['classifier']
     df = pd.read_csv(file_path)
     df = handle_duplicates(df)
-    # Separate features and target variable
     X, y = separate_features_target(df, target_column)
-    # Identify numerical and categorical features
     numerical_features, categorical_features = identify_features(X)
-    # Create preprocessor
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     preprocessor = create_preprocessor(numerical_features,categorical_features)
-    # Use the specified classifier or default to RandomForestClassifier
     if classifier is None:
         classifier = RandomForestClassifier()
-    # Create the pipeline
     pipeline = create_pipeline(preprocessor, classifier)
-    # Split the dataset into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    # Train the pipeline on the training data
+
     train_pipeline(pipeline, X_train, y_train)
-    # Evaluate the model on the testing data
-    accuracy = evaluate_pipeline(pipeline, X_test, y_test)
-    # Save the trained pipeline to a file
-    save_pipeline(pipeline, save_model_filename) 
+    
+    accuracy, report, conf_matrix, mae, mse, r_squared = evaluate_model(pipeline, X_test, y_test)
+    timestamp = pd.Timestamp.now().strftime('%Y%m%d%H%M%S')
+    folder_path = f"/opt/airflow/model_pipelines/Base_model/{classifier.__class__.__name__}_{timestamp}"
+    os.makedirs(folder_path, exist_ok=True)
+    save_model_and_metrics(pipeline, folder_path, accuracy, report, conf_matrix, mae, mse, r_squared)
+    
+    print(f"Accuracy: {accuracy:.4f}")
+    print("Classification Report:")
+    print(report)
+    print("Confusion Matrix:")
+    print(conf_matrix)
+    print(f"Mean Absolute Error: {mae:.4f}")
+    print(f"Mean Squared Error: {mse:.4f}")
+    print(f"R-squared: {r_squared:.4f}")
+
     return accuracy
-
-
-def predict_save_csv(**kwargs):
-    model_filename = kwargs['model_filename']
-    new_data_filename = kwargs['new_data_filename']
-    output_filename = kwargs['output_filename']
-    # Load the pre-trained pipeline
-    loaded_pipeline = load_pipeline(model_filename)
-    # Read the new data
-    new_data = pd.read_csv(new_data_filename)
-    # Predict with the loaded pipeline
-    predictions = predict_with_pipeline(loaded_pipeline, new_data)
-    predictions_df = pd.DataFrame(predictions, columns=['Predicted_Label'])
-    # Save predictions to a CSV file
-    predictions_df.to_csv(output_filename, index=False)
-    print("prediction is done")
 
 default_args = {
     'owner': 'sankalp',
@@ -83,7 +73,7 @@ default_args = {
 }
 
 dag = DAG(
-    'simple_ml_pipeline',
+    'ml_pipeline',
     default_args=default_args,
     description='creating ml pipeline using airfloe',
     schedule_interval=timedelta(days=1),
@@ -99,27 +89,26 @@ load_data = PythonOperator(
     dag=dag,
 )
 
-train_save_model = PythonOperator(
+train_save_model_1 = PythonOperator(
     task_id='train_save_model',
     python_callable=train_and_evaluate_model,
     op_kwargs={
         'file_path':'/opt/airflow/data/training_data/train_data.csv', 
         'target_column':'cid', 
-        'save_model_filename':'/opt/airflow/model_pipelines/trained_pipeline.joblib', 
         'classifier':RandomForestClassifier(),
     },
     dag=dag,
 )
 
-predict = PythonOperator(
-    task_id='predict_save_csv',
-    python_callable=predict_save_csv,
-    op_kwargs ={
-        'model_filename':'/opt/airflow/model_pipelines/trained_pipeline.joblib', 
-        'new_data_filename':'/opt/airflow/data/validation_data/test_data.csv', 
-        'output_filename':'/opt/airflow/data/predictions/predictions.csv',
+train_save_model_2 = PythonOperator(
+    task_id='train_save_model_1',
+    python_callable=train_and_evaluate_model,
+    op_kwargs={
+        'file_path':'/opt/airflow/data/training_data/train_data.csv', 
+        'target_column':'cid', 
+        'classifier':SVC(),
     },
     dag=dag,
 )
 
-load_data >> train_save_model >> predict 
+load_data >> [train_save_model_1,train_save_model_2]
