@@ -1,8 +1,9 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
-from datetime import datetime
-from airflow.models import Variable
 from datetime import datetime, timedelta
+import csv
+import logging
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 import os
 
 scripts_folder_path = "/opt/airflow/ml_pipeline_scripts" 
@@ -15,6 +16,24 @@ os.chdir(pipeline_folder_path2)
 
 exec(open('/opt/airflow/ml_pipeline_scripts/ml_pipeline.py').read())
 exec(open('/opt/airflow/ml_pipeline_scripts/hyper_tuning.py').read())
+
+
+
+def extract_from_db():
+    # step 1: query data from postgresql db and save into text file
+    hook = PostgresHook(postgres_conn_id="db_conn_ml")
+    conn = hook.get_conn()
+    cursor = conn.cursor()
+    cursor.execute("select * from credit_card_eligibility")
+    with open(f"/opt/airflow/data/extracted_data/get_data.csv", "w") as f:
+        csv_writer = csv.writer(f)
+        csv_writer.writerow([i[0] for i in cursor.description])
+        csv_writer.writerows(cursor)
+        f.flush()
+        cursor.close()
+        conn.close()
+        logging.info("Saved orders data in text file:", f"/opt/airflow/data/extracted_data/get_data.csv")
+
 
 
 def train_and_evaluate_model(**kwargs):
@@ -45,6 +64,7 @@ def train_and_evaluate_model(**kwargs):
 
     #folder_path = f"/opt/airflow/model_pipelines/Base_model/{classifier.__class__.__name__}_{timestamp}"
     os.makedirs(folder_path, exist_ok=True)
+    
     save_model_and_metrics(pipeline, folder_path, accuracy, report, conf_matrix, mae, mse, r_squared)
     print(f"Accuracy: {accuracy:.4f}")
     print("Classification Report:")
@@ -58,7 +78,7 @@ def train_and_evaluate_model(**kwargs):
 
 
 def benchmark_criteria(ti):
-    accuracy = Variable.get("my_result")
+    accuracy = ti.xcom_pull(task_ids='train_model')
     accuracy = float(accuracy)
     print(type(accuracy))
     if (accuracy > 0.9):
@@ -124,7 +144,7 @@ def hypertuning(**kwargs):
 default_args = {
     'owner': 'sankalp',
     'depends_on_past': False,
-    'start_date': datetime(2023, 12, 7),
+    'start_date': datetime(2023, 12, 11),
     'catchup': False,
 }
 
@@ -135,12 +155,20 @@ dag = DAG(
     schedule_interval="@daily",
 )
 
+
+extract = PythonOperator(
+    task_id="extract_data_from_db",
+    python_callable=extract_from_db,
+    dag=dag,
+)
+
+
 train = PythonOperator(
     task_id='train_model',
     python_callable=train_and_evaluate_model,
     op_kwargs={
-        'file_path':'/opt/airflow/data/training_data/train_data.csv', 
-        'target_column':'cid', 
+        'file_path':'/opt/airflow/data/extracted_data/get_data.csv', 
+        'target_column':'eligible', 
         'classifier':RandomForestClassifier(),
     },
     dag=dag,
@@ -162,8 +190,8 @@ tune_and_save = PythonOperator(
     task_id='hyperparameter_tunning',
     python_callable=hypertuning,
     op_kwargs={
-        'file_path':'/opt/airflow/data/training_data/train_data.csv', 
-        'target_column':'cid', 
+        'file_path':'/opt/airflow/data/extracted_data/get_data.csv', 
+        'target_column':'eligible', 
         'classifier':RandomForestClassifier(),
     },
     dag=dag,
@@ -175,5 +203,5 @@ tune_save = PythonOperator(
     dag=dag,
 )
 
-train >> benchmark >> [saved,tune_and_save]
+extract >> train >> benchmark >> [saved,tune_and_save]
 tune_and_save >> tune_save

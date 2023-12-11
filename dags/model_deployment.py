@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
+from airflow.providers.postgres.operators.postgres import PostgresOperator
 import os
 
 
@@ -50,11 +51,26 @@ predict = PythonOperator(
     task_id='predict_save_csv',
     python_callable=predict_save_csv,
     op_kwargs ={
-        'model_filename':'/opt/airflow/model_pipelines/tuned_pipeline.joblib', 
+        'model_filename':'/opt/airflow/model_pipelines/Anti_Benchmark_Models/after_tuned/RandomForestClassifier_20231207053800/model_20231207053800.joblib', 
         'new_data_filename':'/opt/airflow/data/validation_data/test_data.csv', 
         'output_filename':'/opt/airflow/data/predictions/predictions_after_tuned.csv',
     },
     dag=dag,
 )
 
-predict 
+
+task1 = PostgresOperator(
+        task_id='create_postgres_table',
+        postgres_conn_id='db_conn_ml',
+        sql="""
+            create table if not exists dag_runs (
+                dt date,
+                dag_id character varying,
+                primary key (dt, dag_id)
+            )
+        """,
+        dag = dag,
+    )
+
+
+predict >> task1
