@@ -9,14 +9,19 @@ scripts_folder_path = "/opt/airflow/ml_pipeline_scripts"
 data_folder_path1 = "/opt/airflow/data" 
 pipeline_folder_path2 = "/opt/airflow/model_pipelines" 
 
+
 os.chdir(scripts_folder_path)
 os.chdir(data_folder_path1)
 os.chdir(pipeline_folder_path2)
 
 exec(open('/opt/airflow/ml_pipeline_scripts/ml_pipeline.py').read())
+exec(open('/opt/airflow/ml_pipeline_scripts/ml_ops.py').read())
+
+
 
 def predict_save_csv(**kwargs):
-    model_filename = kwargs['model_filename']
+    directory = kwargs['directory']
+    model_filename = find_best_model(directory)
     new_data_filename = kwargs['new_data_filename']
     output_filename = kwargs['output_filename']
     # Load the pre-trained pipeline
@@ -43,15 +48,18 @@ default_args = {
 dag = DAG(
     'model_deployment',
     default_args=default_args,
-    description='creating ml pipeline using airfloe',
+    description='prediction using best model',
     schedule_interval=timedelta(days=1),
 )
+
+
 
 predict = PythonOperator(
     task_id='predict_save_csv',
     python_callable=predict_save_csv,
     op_kwargs ={
-        'model_filename':'/opt/airflow/model_pipelines/Anti_Benchmark_Models/after_tuned/RandomForestClassifier_20231207053800/model_20231207053800.joblib', 
+        #'model_filename':'/opt/airflow/model_pipelines/Anti_Benchmark_Models/after_tuned/RandomForestClassifier_20231207053800/model_20231207053800.joblib',
+        'directory': '/opt/airflow/model_pipelines/Anti_Benchmark_Models/after_tuned', 
         'new_data_filename':'/opt/airflow/data/validation_data/test_data.csv', 
         'output_filename':'/opt/airflow/data/predictions/predictions_after_tuned.csv',
     },
@@ -59,18 +67,4 @@ predict = PythonOperator(
 )
 
 
-task1 = PostgresOperator(
-        task_id='create_postgres_table',
-        postgres_conn_id='db_conn_ml',
-        sql="""
-            create table if not exists dag_runs (
-                dt date,
-                dag_id character varying,
-                primary key (dt, dag_id)
-            )
-        """,
-        dag = dag,
-    )
-
-
-predict >> task1
+predict

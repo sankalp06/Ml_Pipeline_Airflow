@@ -20,7 +20,6 @@ exec(open('/opt/airflow/ml_pipeline_scripts/hyper_tuning.py').read())
 
 
 def extract_from_db():
-    # step 1: query data from postgresql db and save into text file
     hook = PostgresHook(postgres_conn_id="db_conn_ml")
     conn = hook.get_conn()
     cursor = conn.cursor()
