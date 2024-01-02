@@ -25,7 +25,7 @@ def identify_features(X):
 
 def handle_duplicates(df):
     df_no_duplicates = df.drop_duplicates()
-    return df_no_duplicates
+    return df_no_duplicates  
 
 def create_preprocessor(numerical_features,categorical_features):
     numerical_transformer = Pipeline(steps=[

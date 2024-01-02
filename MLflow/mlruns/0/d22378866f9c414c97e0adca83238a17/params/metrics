@@ -1,0 +1,16 @@
+{
+    "accuracy": 0.8808411214953271,
+    "confusion_matrix": [
+        [
+            314,
+            13
+        ],
+        [
+            38,
+            63
+        ]
+    ],
+    "mean_absolute_error": 0.1191588785046729,
+    "mean_squared_error": 0.1191588785046729,
+    "r_squared": 0.3390862021982014
+}

@@ -1,0 +1,15 @@
+artifact_uri: file:///c:/Users/ADMIN/Documents/ML_Pipeline_Airflow_git/Ml_Pipeline_Airflow/MLflow/mlruns/0/d22378866f9c414c97e0adca83238a17/artifacts
+end_time: 1704172085653
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: d22378866f9c414c97e0adca83238a17
+run_name: treasured-snail-511
+run_uuid: d22378866f9c414c97e0adca83238a17
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1704172076308
+status: 3
+tags: []
+user_id: ADMIN
